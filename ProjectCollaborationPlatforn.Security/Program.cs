@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using ProjectCollaborationPlatforn.Security.DataAccess;
 using ProjectCollaborationPlatforn.Security.Interfaces;
@@ -33,7 +34,8 @@ namespace ProjectCollaborationPlatforn.Security
             builder.Services.AddScoped<ITokenGenerator, TokenGenerator>();
 
             builder.Services.AddIdentity<User, IdentityRole<Guid>>()
-                .AddEntityFrameworkStores<ApplicationDbContext>();
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
 
             builder.Services.AddCors(options =>
             {
@@ -46,10 +48,7 @@ namespace ProjectCollaborationPlatforn.Security
                 });
             });
 
-            // jwt auth
-            var authConfig = new AuthSettings();
-            builder.Configuration.GetSection("JWT").Bind(authConfig);
-            builder.Services.AddSingleton(authConfig);
+            builder.Services.Configure<AuthSettings>(builder.Configuration.GetSection("JWT"));
 
             builder.Services.AddAuthentication(options =>
             {
@@ -63,16 +62,16 @@ namespace ProjectCollaborationPlatforn.Security
                     options.TokenValidationParameters = new TokenValidationParameters
                     {
                         ValidateIssuer = true,
-                        ValidIssuer = builder.Configuration["Auth:Issuer"],
+                        ValidIssuer = builder.Configuration["JWT:Issuer"],
 
                         ValidateAudience = true,
-                        ValidAudience = builder.Configuration["Auth:Audience"],
+                        ValidAudience = builder.Configuration["JWT:Audience"],
 
                         ValidateLifetime = true,
 
                         ValidateIssuerSigningKey = true,
                         ClockSkew = TimeSpan.Zero,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(builder.Configuration["Auth:SecretKey"])),
+                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(builder.Configuration["JWT:SecretKey"])),
                     };
                 });
 
