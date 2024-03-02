@@ -25,14 +25,13 @@ namespace ProjectCollaborationPlatforn.Security.Services.Autentication
         {
             var handler = new JwtSecurityTokenHandler();
             var key = Encoding.ASCII.GetBytes(_authSettings.SecretKey);
-            var role = await _userManager.GetRolesAsync(user);
+            var roles = await _userManager.GetRolesAsync(user);
 
 
             ClaimsIdentity identity = new ClaimsIdentity(new[] {
                 new Claim(ClaimTypes.Email, user.Email),
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Role, role[0]),
-                new Claim(ClaimTypes.Role, role[1])
+                new Claim(ClaimTypes.Role, roles.FirstOrDefault(ClaimTypes.Role))
 
             });
 
