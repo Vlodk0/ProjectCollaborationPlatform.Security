@@ -1,10 +1,9 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using ProjectCollaborationPlatforn.Security.DTOs;
 using ProjectCollaborationPlatforn.Security.Interfaces;
-using ProjectCollaborationPlatforn.Security.Models;
 using ProjectCollaborationPlatforn.Security.Services.Autentication;
+using System.Security.Claims;
 
 namespace ProjectCollaborationPlatforn.Security.Controllers
 {
@@ -14,27 +13,29 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
     {
         readonly IUserService _userService;
         readonly ITokenGenerator _tokenGenerator;
-        readonly UserManager<User> _userManager;
 
-        public UserController(IUserService userService, ITokenGenerator tokenGenerator, UserManager<User> userManager)
+        public UserController(IUserService userService, ITokenGenerator tokenGenerator)
         {
             _userService = userService;
             _tokenGenerator = tokenGenerator;
-            _userManager = userManager;
         }
 
         [HttpPost]
         [AllowAnonymous]
         public async Task<IActionResult> SignIn([FromBody] SignInDTO userSignInDTO)
         {
-            var user = await _userManager.FindByEmailAsync(userSignInDTO.Email);
-            if(user == null)
+            if (await _userService.IsUserExists(userSignInDTO.Email))
             {
                 return StatusCode(StatusCodes.Status404NotFound, "No user exists");
             }
 
-            var token = await _tokenGenerator.GenerateTokens(user);
-            if(token == null)
+            if (!await _userService.CheckUserPassword(userSignInDTO.Email, userSignInDTO.Password))
+            {
+                return StatusCode(StatusCodes.Status400BadRequest, "Incorrect password!");
+            }
+
+            var token = await _userService.GenerateTokens(userSignInDTO.Email);
+            if (token == null)
             {
                 return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
             }
@@ -48,39 +49,31 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> SignUp([FromBody] SignUpDTO userSignUpDTO)
         {
-            try
+            if (!ModelState.IsValid)
             {
-                if(!ModelState.IsValid)
-                {
-                    return StatusCode(StatusCodes.Status400BadRequest, ModelState);
-                }
-
-                var user = await _userManager.FindByEmailAsync(userSignUpDTO.Email);
-                if(user != null)
-                {
-                    return StatusCode(StatusCodes.Status400BadRequest, "User is already exists!");
-                }
-
-                if(await _userService.AddUser(userSignUpDTO))
-                {
-                    var usr = await _userManager.FindByEmailAsync(userSignUpDTO.Email);
-
-                    if (await _userService.SendEmailVerification(usr))
-                    {
-                        return StatusCode(StatusCodes.Status200OK);
-                    }
-                    //return StatusCode(StatusCodes.Status200OK, 
-                    //    await _tokenGenerator.GenerateTokens(await _userManager.FindByEmailAsync(userSignUpDTO.Email)));
-                }
-
+                return StatusCode(StatusCodes.Status400BadRequest, ModelState);
             }
-            catch (Exception) { }
 
-            return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
+            if (await _userService.IsUserExists(userSignUpDTO.Email))
+            {
+                return StatusCode(StatusCodes.Status400BadRequest, "User is already exists!");
+            }
+
+            var user = await _userService.AddUser(userSignUpDTO);
+
+            if (user != null)
+            {
+                return Created("/api/user", user);
+            }
+            else
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
+            }
+
         }
 
         [HttpGet]
-        public async Task<IActionResult> VerificateEmail([FromQuery] string userId, [FromQuery] string code)
+        public async Task<IActionResult> EmailVerification([FromQuery] string userId, [FromQuery] string code)
         {
             if (userId == null || code == null)
                 return BadRequest(new AuthResponse()
@@ -117,6 +110,69 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
                 return Content(VerifiedMessage.FailureMessage, "text/html");
             }
 
+        }
+
+        [AllowAnonymous]
+        [HttpPost]
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDTO refreshTokenDTO)
+        {
+            if (!ModelState.IsValid)
+            {
+                return StatusCode(StatusCodes.Status400BadRequest);
+            }
+
+            var result = await _tokenGenerator.RefreshAccessToken(refreshTokenDTO.AccessToken,
+                refreshTokenDTO.RefreshToken);
+
+            if (result == null)
+            {
+                return StatusCode(StatusCodes.Status400BadRequest);
+            }
+
+            return Ok(result);
+        }
+
+        [AllowAnonymous]
+        [HttpPost("resetcode")]
+        public async Task<IActionResult> ResettingCode([FromBody] EmailDTO emailDTO)
+        {
+            var id = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _userService.IsUserExists(emailDTO.To);
+
+            if (!user)
+            {
+                return StatusCode(StatusCodes.Status400BadRequest, "User doesn't exists");
+            }
+
+            var userGetResetCode = await _userService.GetUserById(id);
+            if (await _userService.SendPasswordResetCode(userGetResetCode))
+            {
+                return StatusCode(StatusCodes.Status200OK, "Reset code has sent!");
+            }
+            else
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Server error");
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpPost("verifyresetcode")]
+        public async Task<IActionResult> VerifyingResetCode([FromBody] ResetCodeDTO resetCodeDTO)
+        {
+            if (!await _userService.IsUserExists(resetCodeDTO.Email))
+            {
+                return StatusCode(StatusCodes.Status400BadRequest, "Invalid email or doesn't exists");
+            }
+
+            var user = await _userService.GetUserByEmail(resetCodeDTO.Email);
+            if (await _userService.VerifyPasswordResetCode(user, resetCodeDTO.ResetCode, resetCodeDTO.NewPassword))
+            {
+                return StatusCode(StatusCodes.Status200OK, "Password reset successfully");
+            }
+            else
+            {
+                return StatusCode(StatusCodes.Status500InternalServerError, "Server error");
+            }
         }
     }
 }
