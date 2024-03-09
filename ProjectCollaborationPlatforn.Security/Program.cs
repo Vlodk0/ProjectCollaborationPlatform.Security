@@ -1,13 +1,17 @@
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using ProjectCollaborationPlatforn.Security.DataAccess;
+using ProjectCollaborationPlatforn.Security.Helpers.DTOValidation;
+using ProjectCollaborationPlatforn.Security.Helpers.ErrorFilter;
 using ProjectCollaborationPlatforn.Security.Interfaces;
 using ProjectCollaborationPlatforn.Security.Models;
 using ProjectCollaborationPlatforn.Security.Services;
 using ProjectCollaborationPlatforn.Security.Services.Autentication;
+using Serilog;
 using System.Text;
 
 namespace ProjectCollaborationPlatforn.Security
@@ -20,16 +24,22 @@ namespace ProjectCollaborationPlatforn.Security
 
             // Add services to the container.
             
-            builder.Services.AddControllers();
+            builder.Services.AddControllers(options =>
+            {
+                options.Filters.Add(typeof(CustomExceptionFilter));
+            });
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
-            
+
             builder.Services.AddDbContext<ApplicationDbContext>(options =>
             {
                 options.UseSqlServer(builder.Configuration.GetConnectionString("ConnectionStr"));
             });
 
+            builder.Services.AddValidatorsFromAssemblyContaining<SignUpDTOValidator>();
+            builder.Services.AddValidatorsFromAssemblyContaining<SignInDTOValidator>();
+            builder.Services.AddValidatorsFromAssemblyContaining<EmailDTOValidator>();
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<ITokenGenerator, TokenGenerator>();
 
@@ -74,6 +84,9 @@ namespace ProjectCollaborationPlatforn.Security
                         IssuerSigningKey = new SymmetricSecurityKey(Encoding.ASCII.GetBytes(builder.Configuration["JWT:SecretKey"])),
                     };
                 });
+                
+            builder.Host.UseSerilog((context, configuration) =>
+                configuration.ReadFrom.Configuration(context.Configuration));
 
 
 
@@ -85,8 +98,14 @@ namespace ProjectCollaborationPlatforn.Security
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
+            else
+            {
+                app.UseExceptionHandler("/Error");
+            }
 
             app.UseRouting();
+
+            app.UseSerilogRequestLogging();
 
             app.UseCors("AllowMyOrigins");
 
@@ -98,17 +117,18 @@ namespace ProjectCollaborationPlatforn.Security
 
             app.MapControllers();
 
-            //using (var scope = app.Services.CreateScope())
-            //{
-            //    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
+            using (var scope = app.Services.CreateScope())
+            {
+                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
 
-            //    var roles = new[] { "Admin", "Dev", "ProjectOwner" };
-            //    foreach (var role in roles)
-            //    {
-            //        if (!await roleManager.RoleExistsAsync(role))
-            //            await roleManager.CreateAsync(new IdentityRole<Guid>(role));
-            //    }
-            //}
+                var roles = new[] { "Admin", "Dev", "ProjectOwner", "SuperAdmin" };
+
+                foreach (var role in roles)
+                {
+                    if (!await roleManager.RoleExistsAsync(role))
+                        await roleManager.CreateAsync(new IdentityRole<Guid>(role));
+                }
+            }
 
             app.Run();
         }
