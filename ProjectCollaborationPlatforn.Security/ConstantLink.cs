@@ -2,6 +2,6 @@
 {
     public class ConstantLink
     {
-        public static string ngrok = "https://8653-46-219-228-15.ngrok-free.app";
+        public static string ngrok = "https://0673-178-212-241-227.ngrok-free.app";
     }
 }

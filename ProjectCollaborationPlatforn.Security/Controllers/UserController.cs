@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ProjectCollaborationPlatforn.Security.DTOs;
+using ProjectCollaborationPlatforn.Security.Helpers.ErrorFilter;
 using ProjectCollaborationPlatforn.Security.Interfaces;
 using ProjectCollaborationPlatforn.Security.Services.Autentication;
 using System.Security.Claims;
@@ -11,6 +12,7 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
     [ApiController]
     public class UserController : ControllerBase
     {
+        //soldier diff. Houst best hog main
         readonly IUserService _userService;
         readonly ITokenGenerator _tokenGenerator;
 
@@ -24,25 +26,38 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> SignIn([FromBody] SignInDTO userSignInDTO)
         {
-            if (await _userService.IsUserExists(userSignInDTO.Email))
+            if (!await _userService.IsUserExists(userSignInDTO.Email))
             {
-                return StatusCode(StatusCodes.Status404NotFound, "No user exists");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status404NotFound,
+                    Title = "User not found",
+                    Detail = "Error occured while finding user on database"
+                };
             }
 
             if (!await _userService.CheckUserPassword(userSignInDTO.Email, userSignInDTO.Password))
             {
-                return StatusCode(StatusCodes.Status400BadRequest, "Incorrect password!");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "Incorrect password!"
+                };
             }
 
             var token = await _userService.GenerateTokens(userSignInDTO.Email);
             if (token == null)
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while creating user on server"
+                };
             }
-            else
-            {
-                return StatusCode(StatusCodes.Status200OK, token);
-            }
+
+            return Ok(token);
         }
 
         [HttpPost]
@@ -56,7 +71,12 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             if (await _userService.IsUserExists(userSignUpDTO.Email))
             {
-                return StatusCode(StatusCodes.Status400BadRequest, "User is already exists!");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "User is already exists"
+                };
             }
 
             var user = await _userService.AddUser(userSignUpDTO);
@@ -67,7 +87,12 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
             }
             else
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while server running"
+                };
             }
 
         }
@@ -118,7 +143,7 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
         {
             if (!ModelState.IsValid)
             {
-                return StatusCode(StatusCodes.Status400BadRequest);
+                return BadRequest();
             }
 
             var result = await _tokenGenerator.RefreshAccessToken(refreshTokenDTO.AccessToken,
@@ -126,7 +151,12 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             if (result == null)
             {
-                return StatusCode(StatusCodes.Status400BadRequest);
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "Token is null"
+                };
             }
 
             return Ok(result);
@@ -141,17 +171,27 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             if (!user)
             {
-                return StatusCode(StatusCodes.Status400BadRequest, "User doesn't exists");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "No user exists"
+                };
             }
 
             var userGetResetCode = await _userService.GetUserById(id);
             if (await _userService.SendPasswordResetCode(userGetResetCode))
             {
-                return StatusCode(StatusCodes.Status200OK, "Reset code has sent!");
+                return Ok("Reset code has sent!");
             }
             else
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, "Server error");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while server running"
+                };
             }
         }
 
@@ -161,17 +201,27 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
         {
             if (!await _userService.IsUserExists(resetCodeDTO.Email))
             {
-                return StatusCode(StatusCodes.Status400BadRequest, "Invalid email or doesn't exists");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "Invalid email or doesn't exists"
+                };
             }
 
             var user = await _userService.GetUserByEmail(resetCodeDTO.Email);
             if (await _userService.VerifyPasswordResetCode(user, resetCodeDTO.ResetCode, resetCodeDTO.NewPassword))
             {
-                return StatusCode(StatusCodes.Status200OK, "Password reset successfully");
+                return Ok("Password reset successfully");
             }
             else
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, "Server error");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while server running"
+                };
             }
         }
     }

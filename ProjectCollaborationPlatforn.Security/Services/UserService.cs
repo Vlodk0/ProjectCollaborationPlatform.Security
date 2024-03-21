@@ -87,7 +87,7 @@ namespace ProjectCollaborationPlatforn.Security.Services
         private Task<string> CallBackUrl(User user, string code)
         {
             var ngrok = ConstantLink.ngrok;
-            var callbackUrl = ngrok + "/api/User/VerificateEmail" + $"?userId={user.Id}&code={code}";
+            var callbackUrl = ngrok + "/api/User/EmailVerification" + $"?userId={user.Id}&code={code}";
 
             return Task.FromResult(callbackUrl);
 
@@ -101,7 +101,7 @@ namespace ProjectCollaborationPlatforn.Security.Services
 
         public async Task<bool> DeleteUser(string email)
         {
-            var user = await _userManager.FindByIdAsync(email);
+            var user = await _userManager.FindByEmailAsync(email);
             var result = await _userManager.DeleteAsync(user);
             return result.Succeeded;
         }
@@ -365,10 +365,7 @@ namespace ProjectCollaborationPlatforn.Security.Services
 
         public async Task<bool> VerifyEmail(UserDTO user, string code)
         {
-            var userVerify = new User()
-            {
-                Email = user.Email,
-            };
+            var userVerify = await _userManager.FindByEmailAsync(user.Email);
             var result = await _userManager.ConfirmEmailAsync(userVerify, code);
 
             return result.Succeeded;
@@ -377,10 +374,7 @@ namespace ProjectCollaborationPlatforn.Security.Services
         public async Task<bool> VerifyPasswordResetCode(UserDTO userDTO, string password, string newPassword)
         {
 
-            var user = new User()
-            {
-                Email = userDTO.Email
-            };
+            var user = await _userManager.FindByEmailAsync(userDTO.Email);
             var result = await _userManager.ResetPasswordAsync(user, password, newPassword);
 
             return result.Succeeded;
