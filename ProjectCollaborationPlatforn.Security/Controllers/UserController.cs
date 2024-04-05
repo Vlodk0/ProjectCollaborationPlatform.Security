@@ -81,9 +81,12 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             var user = await _userService.AddUser(userSignUpDTO);
 
-            if (user != null)
+            if (user)
             {
-                return Created("/api/user", user);
+                return Ok(new
+                {
+                    message = "Email has been sent"
+                });
             }
             else
             {
@@ -166,7 +169,6 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
         [HttpPost("resetcode")]
         public async Task<IActionResult> ResettingCode([FromBody] EmailDTO emailDTO)
         {
-            var id = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
             var user = await _userService.IsUserExists(emailDTO.To);
 
             if (!user)
@@ -179,7 +181,7 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
                 };
             }
 
-            var userGetResetCode = await _userService.GetUserById(id);
+            var userGetResetCode = await _userService.GetUserByEmail(emailDTO.To);
             if (await _userService.SendPasswordResetCode(userGetResetCode))
             {
                 return Ok("Reset code has sent!");

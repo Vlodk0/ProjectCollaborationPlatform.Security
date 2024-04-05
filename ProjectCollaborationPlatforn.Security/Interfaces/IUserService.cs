@@ -6,7 +6,7 @@ namespace ProjectCollaborationPlatforn.Security.Interfaces
 {
     public interface IUserService
     {
-        public Task<UserDTO> AddUser(SignUpDTO user);
+        public Task<bool> AddUser(SignUpDTO user);
         public Task<bool> DeleteUser(string email);
         public Task<UserDTO> GetUserById(string id);
         public Task<UserDTO> GetUserByEmail(string email);

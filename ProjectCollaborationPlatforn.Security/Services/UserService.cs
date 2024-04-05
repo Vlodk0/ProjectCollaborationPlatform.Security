@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using ProjectCollaborationPlatforn.Security.DataAccess;
 using ProjectCollaborationPlatforn.Security.Services.Autentication;
 using ProjectCollaborationPlatforn.Security.Helpers.ErrorFilter;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ProjectCollaborationPlatforn.Security.Services
 {
@@ -30,7 +31,7 @@ namespace ProjectCollaborationPlatforn.Security.Services
         }
 
 
-        public async Task<UserDTO> AddUser(SignUpDTO userDTO)
+        public async Task<bool> AddUser(SignUpDTO userDTO)
         {
             var user = new User()
             {
@@ -46,12 +47,7 @@ namespace ProjectCollaborationPlatforn.Security.Services
                 var isSent = await SendEmailVerification(createdUser);
                 if (!isSent)
                     await _userManager.DeleteAsync(createdUser);
-                return new UserDTO()
-                {
-                    UserName = createdUser.UserName,
-                    Email = createdUser.Email,
-                    RoleName = addRoleResult
-                };
+                return true;
             }
             else
             {
