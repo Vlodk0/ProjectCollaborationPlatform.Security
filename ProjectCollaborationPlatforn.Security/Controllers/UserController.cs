@@ -83,10 +83,7 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             if (user)
             {
-                return Ok(new
-                {
-                    message = "Email has been sent"
-                });
+                return Ok("User created");
             }
             else
             {
@@ -131,17 +128,18 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             if (await _userService.VerifyEmail(user, code))
             {
-                return Content(VerifiedMessage.SuccessMessage, "text/html");
+                return Redirect("http://localhost:4200/email-success");
             }
             else
             {
-                return Content(VerifiedMessage.FailureMessage, "text/html");
+                return Redirect("http://localhost:4200/email-failed");
+
             }
 
         }
 
         [AllowAnonymous]
-        [HttpPost]
+        [HttpPost]  
         public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDTO refreshTokenDTO)
         {
             if (!ModelState.IsValid)
