@@ -10,7 +10,6 @@ using Microsoft.EntityFrameworkCore;
 using ProjectCollaborationPlatforn.Security.DataAccess;
 using ProjectCollaborationPlatforn.Security.Services.Autentication;
 using ProjectCollaborationPlatforn.Security.Helpers.ErrorFilter;
-using Microsoft.AspNetCore.Mvc;
 
 namespace ProjectCollaborationPlatforn.Security.Services
 {
