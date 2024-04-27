@@ -41,7 +41,7 @@ namespace ProjectCollaborationPlatforn.Security.Services.Autentication
                 Audience = _authSettings.Audience,
                 SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature),
                 Subject = identity,
-                Expires = DateTime.Now.AddHours(_authSettings.AccessTokenExpirationMinutes)
+                Expires = DateTime.Now.AddMinutes(_authSettings.AccessTokenExpirationMinutes)
             });
             return handler.WriteToken(securityToken);
         }
@@ -74,7 +74,7 @@ namespace ProjectCollaborationPlatforn.Security.Services.Autentication
         public async Task<AuthenticationResponse> RefreshAccessToken(string accessToken, string refreshToken)
         {
             var principal = GetPrincipalFromExpiredToken(accessToken);
-            var user = await _userManager.FindByNameAsync(principal.Identity.Name);
+            var user = await _userManager.FindByIdAsync(principal.FindFirstValue(ClaimTypes.NameIdentifier));
             if (user == null || user.RefreshToken != refreshToken)
             {
                 throw new SecurityTokenException("Invalid refresh token");

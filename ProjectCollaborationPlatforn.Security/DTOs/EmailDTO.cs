@@ -1,8 +1,10 @@
-﻿namespace ProjectCollaborationPlatforn.Security.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ProjectCollaborationPlatforn.Security.DTOs
 {
     public class EmailDTO
     {
-        public string To {  get; set; }      
+        public string To {  get; set; }
         public string Subject { get; set; }
     }
 }

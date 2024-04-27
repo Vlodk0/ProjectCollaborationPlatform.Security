@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using ProjectCollaborationPlatforn.Security.DTOs;
+using ProjectCollaborationPlatforn.Security.Helpers.ErrorFilter;
 using ProjectCollaborationPlatforn.Security.Interfaces;
-using ProjectCollaborationPlatforn.Security.Models;
 using ProjectCollaborationPlatforn.Security.Services.Autentication;
+using System.Security.Claims;
 
 namespace ProjectCollaborationPlatforn.Security.Controllers
 {
@@ -12,75 +12,93 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
     [ApiController]
     public class UserController : ControllerBase
     {
+        //soldier diff. Houst best hog main
         readonly IUserService _userService;
         readonly ITokenGenerator _tokenGenerator;
-        readonly UserManager<User> _userManager;
 
-        public UserController(IUserService userService, ITokenGenerator tokenGenerator, UserManager<User> userManager)
+        public UserController(IUserService userService, ITokenGenerator tokenGenerator)
         {
             _userService = userService;
             _tokenGenerator = tokenGenerator;
-            _userManager = userManager;
         }
 
         [HttpPost]
         [AllowAnonymous]
         public async Task<IActionResult> SignIn([FromBody] SignInDTO userSignInDTO)
         {
-            var user = await _userManager.FindByEmailAsync(userSignInDTO.Email);
-            if(user == null)
+            if (!await _userService.IsUserExists(userSignInDTO.Email))
             {
-                return StatusCode(StatusCodes.Status404NotFound, "No user exists");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status404NotFound,
+                    Title = "User not found",
+                    Detail = "Error occured while finding user on database"
+                };
             }
 
-            var token = await _tokenGenerator.GenerateTokens(user);
-            if(token == null)
+            if (!await _userService.CheckUserPassword(userSignInDTO.Email, userSignInDTO.Password))
             {
-                return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "Incorrect password!"
+                };
             }
-            else
+
+            var token = await _userService.GenerateTokens(userSignInDTO.Email);
+            if (token == null)
             {
-                return StatusCode(StatusCodes.Status200OK, token);
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while creating user on server"
+                };
             }
+
+            return Ok(token);
         }
 
         [HttpPost]
         [AllowAnonymous]
         public async Task<IActionResult> SignUp([FromBody] SignUpDTO userSignUpDTO)
         {
-            try
+            if (!ModelState.IsValid)
             {
-                if(!ModelState.IsValid)
-                {
-                    return StatusCode(StatusCodes.Status400BadRequest, ModelState);
-                }
-
-                var user = await _userManager.FindByEmailAsync(userSignUpDTO.Email);
-                if(user != null)
-                {
-                    return StatusCode(StatusCodes.Status400BadRequest, "User is already exists!");
-                }
-
-                if(await _userService.AddUser(userSignUpDTO))
-                {
-                    var usr = await _userManager.FindByEmailAsync(userSignUpDTO.Email);
-
-                    if (await _userService.SendEmailVerification(usr))
-                    {
-                        return StatusCode(StatusCodes.Status200OK);
-                    }
-                    //return StatusCode(StatusCodes.Status200OK, 
-                    //    await _tokenGenerator.GenerateTokens(await _userManager.FindByEmailAsync(userSignUpDTO.Email)));
-                }
-
+                return StatusCode(StatusCodes.Status400BadRequest, ModelState);
             }
-            catch (Exception) { }
 
-            return StatusCode(StatusCodes.Status500InternalServerError, "Error occured while creating user on server");
+            if (await _userService.IsUserExists(userSignUpDTO.Email))
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "User is already exists"
+                };
+            }
+
+            var user = await _userService.AddUser(userSignUpDTO);
+
+            if (user)
+            {
+                return Ok("User created");
+            }
+            else
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while server running"
+                };
+            }
+
         }
 
         [HttpGet]
-        public async Task<IActionResult> VerificateEmail([FromQuery] string userId, [FromQuery] string code)
+        public async Task<IActionResult> EmailVerification([FromQuery] string userId, [FromQuery] string code)
         {
             if (userId == null || code == null)
                 return BadRequest(new AuthResponse()
@@ -110,13 +128,101 @@ namespace ProjectCollaborationPlatforn.Security.Controllers
 
             if (await _userService.VerifyEmail(user, code))
             {
-                return Content(VerifiedMessage.SuccessMessage, "text/html");
+                return Redirect("http://localhost:4200/email-success");
             }
             else
             {
-                return Content(VerifiedMessage.FailureMessage, "text/html");
+                return Redirect("http://localhost:4200/email-failed");
+
             }
 
+        }
+
+        [AllowAnonymous]
+        [HttpPost]  
+        public async Task<IActionResult> RefreshToken([FromBody] RefreshTokenDTO refreshTokenDTO)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest();
+            }
+
+            var result = await _tokenGenerator.RefreshAccessToken(refreshTokenDTO.AccessToken,
+                refreshTokenDTO.RefreshToken);
+
+            if (result == null)
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "Token is null"
+                };
+            }
+
+            return Ok(result);
+        }
+
+        [AllowAnonymous]
+        [HttpPost("resetcode")]
+        public async Task<IActionResult> ResettingCode([FromBody] EmailDTO emailDTO)
+        {
+            var user = await _userService.IsUserExists(emailDTO.To);
+
+            if (!user)
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "No user exists"
+                };
+            }
+
+            var userGetResetCode = await _userService.GetUserByEmail(emailDTO.To);
+            if (await _userService.SendPasswordResetCode(userGetResetCode))
+            {
+                return Ok("Reset code has sent!");
+            }
+            else
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while server running"
+                };
+            }
+        }
+
+        [AllowAnonymous]
+        [HttpPost("verifyresetcode")]
+        public async Task<IActionResult> VerifyingResetCode([FromBody] ResetCodeDTO resetCodeDTO)
+        {
+            if (!await _userService.IsUserExists(resetCodeDTO.Email))
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status400BadRequest,
+                    Title = "Bad request",
+                    Detail = "Invalid email or doesn't exists"
+                };
+            }
+
+            var user = await _userService.GetUserByEmail(resetCodeDTO.Email);
+            if (await _userService.VerifyPasswordResetCode(user, resetCodeDTO.ResetCode, resetCodeDTO.NewPassword))
+            {
+                return Ok("Password reset successfully");
+            }
+            else
+            {
+                throw new CustomApiException()
+                {
+                    StatusCode = StatusCodes.Status500InternalServerError,
+                    Title = "Server Error",
+                    Detail = "Error occured while server running"
+                };
+            }
         }
     }
 }

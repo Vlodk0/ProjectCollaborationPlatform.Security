@@ -1,4 +1,6 @@
-﻿namespace ProjectCollaborationPlatforn.Security.DTOs
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace ProjectCollaborationPlatforn.Security.DTOs
 {
     public class SignUpDTO
     {
